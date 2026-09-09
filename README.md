@@ -1,10 +1,8 @@
-````md
 # Python Setup
 
 ```powershell
 pip install sympy openpyxl XlsxWriter pyarrow tabulate sortedcontainers matplotlib pandas numpy
 ```
-````
 
 ## Setup Script
 
