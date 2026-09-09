@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $BaseDir = Join-Path $env:LOCALAPPDATA "DevSetup"
 $PythonInstaller = Join-Path $BaseDir "python-installer.exe"
 $VSCodeInstaller = Join-Path $BaseDir "vscode-installer.exe"
+$WallpaperPath = Join-Path $BaseDir "python-wallpaper.png"
 
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
 
@@ -56,6 +57,32 @@ $Packages = @(
 
 & $Python -m pip install --user $Packages
 
+Write-Host "Downloading wallpaper..."
+
+$WallpaperURL = "https://setup-567.pages.dev/Wallpaper/python.png"
+
+Invoke-WebRequest `
+    -Uri $WallpaperURL `
+    -OutFile $WallpaperPath
+
+Add-Type @"
+using System.Runtime.InteropServices;
+
+public class Wallpaper {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int SystemParametersInfo(
+        int uAction,
+        int uParam,
+        string lpvParam,
+        int fuWinIni
+    );
+}
+"@
+
+Write-Host "Setting wallpaper..."
+
+[Wallpaper]::SystemParametersInfo(20, 0, $WallpaperPath, 3) | Out-Null
+
 Write-Host ""
 Write-Host "========================================"
 Write-Host "Installation Complete"
@@ -81,6 +108,14 @@ if (Test-Path $VSCodePath) {
     Write-Host "Installed successfully."
 } else {
     Write-Host "VS Code executable not found."
+}
+
+Write-Host ""
+Write-Host "Wallpaper:"
+if (Test-Path $WallpaperPath) {
+    Write-Host "Set successfully."
+} else {
+    Write-Host "Wallpaper file not found."
 }
 
 Write-Host ""
