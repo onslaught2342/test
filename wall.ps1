@@ -19,10 +19,10 @@ do {
 } while ($Choice -notin @("1", "2"))
 
 if ($Choice -eq "1") {
-    $WallpaperURL = "https://setup-567.pages.dev/Wallpaper/python.png"
+    $WallpaperURL = "https://setup-567.pages.dev/wallpaper/python.png"
     Write-Host "Selected: Python"
 } else {
-    $WallpaperURL = "https://setup-567.pages.dev/Wallpaper/scratch.png"
+    $WallpaperURL = "https://setup-567.pages.dev/wallpaper/scratch.png"
     Write-Host "Selected: Scratch"
 }
 
