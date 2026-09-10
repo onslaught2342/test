@@ -1,0 +1,296 @@
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Matrix Rain Background</title>
+
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #111;
+      }
+
+      #background {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        z-index: 0;
+        user-select: none;
+        pointer-events: none;
+      }
+
+      #matrix {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        pointer-events: none;
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body>
+    <img
+      id="background"
+      src="https://setup-567.pages.dev/wallpaper/scratch.png"
+      alt=""
+    />
+
+    <canvas id="matrix"></canvas>
+
+    <script>
+      "use strict";
+
+      const CONFIG = {
+        backgroundImage: "https://setup-567.pages.dev/wallpaper/scratch.png",
+        hue: 120,
+        saturation: 100,
+        lightness: 48,
+        headLightness: 90,
+        opacity: 0.65,
+        fontSize: 18,
+        columns: null,
+        minLength: 8,
+        maxLength: 24,
+        minSpeed: 4.0,
+        maxSpeed: 6.0,
+        mutationRate: 0.025,
+        fps: 30,
+        renderScale: 0.75,
+        hueVariation: 10,
+        glyphs:
+          "アイウエオカキクケコ" +
+          "サシスセソタチツテト" +
+          "ナニヌネノハヒフヘホ" +
+          "マミムメモヤユヨ" +
+          "ラリルレロワヲン" +
+          "0123456789" +
+          "ABCDEF",
+        glow: false,
+        trailOpacity: 0.55,
+        headOpacity: 0.95,
+      };
+
+      const canvas = document.getElementById("matrix");
+      const ctx = canvas.getContext("2d", {
+        alpha: true,
+        desynchronized: true,
+      });
+
+      const background = document.getElementById("background");
+
+      background.src = CONFIG.backgroundImage;
+
+      let width = 0;
+      let height = 0;
+      let renderWidth = 0;
+      let renderHeight = 0;
+      let columns = [];
+      let lastFrame = 0;
+      const frameInterval = 1000 / CONFIG.fps;
+      let running = true;
+
+      const glyphCache = new Map();
+
+      function createGlyph(char, size, hue) {
+        const key = `${char}_${size}_${hue}`;
+
+        if (glyphCache.has(key)) {
+          return glyphCache.get(key);
+        }
+
+        const padding = 4;
+
+        const glyphCanvas = document.createElement("canvas");
+
+        glyphCanvas.width = size + padding * 2;
+        glyphCanvas.height = size + padding * 2;
+
+        const glyphCtx = glyphCanvas.getContext("2d");
+
+        glyphCtx.font = `${size}px monospace`;
+        glyphCtx.textAlign = "center";
+        glyphCtx.textBaseline = "middle";
+
+        glyphCtx.fillStyle = `hsl(${hue}, ${CONFIG.saturation}%, ${CONFIG.lightness}%)`;
+
+        glyphCtx.fillText(char, glyphCanvas.width / 2, glyphCanvas.height / 2);
+
+        glyphCache.set(key, glyphCanvas);
+
+        return glyphCanvas;
+      }
+
+      function createColumn(index) {
+        const size = CONFIG.fontSize;
+
+        const length =
+          CONFIG.minLength +
+          Math.floor(Math.random() * (CONFIG.maxLength - CONFIG.minLength + 1));
+
+        const chars = new Array(length);
+
+        for (let i = 0; i < length; i++) {
+          chars[i] = randomGlyph();
+        }
+
+        let hue = CONFIG.hue + (Math.random() * 2 - 1) * CONFIG.hueVariation;
+
+        hue = (hue + 360) % 360;
+
+        return {
+          x: index * size,
+          y: -Math.random() * height * 1.5,
+          speed:
+            CONFIG.minSpeed +
+            Math.random() * (CONFIG.maxSpeed - CONFIG.minSpeed),
+          chars,
+          hue,
+          length,
+        };
+      }
+
+      function randomGlyph() {
+        return CONFIG.glyphs[Math.floor(Math.random() * CONFIG.glyphs.length)];
+      }
+
+      function init() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+
+        renderWidth = Math.max(1, Math.floor(width * CONFIG.renderScale));
+
+        renderHeight = Math.max(1, Math.floor(height * CONFIG.renderScale));
+
+        canvas.width = renderWidth;
+        canvas.height = renderHeight;
+
+        ctx.setTransform(CONFIG.renderScale, 0, 0, CONFIG.renderScale, 0, 0);
+
+        const columnCount =
+          CONFIG.columns !== null
+            ? CONFIG.columns
+            : Math.ceil(width / CONFIG.fontSize);
+
+        columns = new Array(columnCount);
+
+        for (let i = 0; i < columnCount; i++) {
+          columns[i] = createColumn(i);
+        }
+      }
+
+      let resizeTimer = null;
+
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+
+        resizeTimer = setTimeout(() => {
+          init();
+        }, 100);
+      });
+
+      function drawColumn(column) {
+        const size = CONFIG.fontSize;
+
+        column.y += column.speed;
+
+        if (Math.random() < CONFIG.mutationRate) {
+          const index = Math.floor(Math.random() * column.chars.length);
+
+          column.chars[index] = randomGlyph();
+        }
+
+        for (let i = 0; i < column.chars.length; i++) {
+          const y = column.y + i * size;
+
+          if (y < -size || y > height + size) {
+            continue;
+          }
+
+          const isHead = i === column.chars.length - 1;
+
+          const trail = 1 - i / column.chars.length;
+
+          const alpha = isHead
+            ? CONFIG.headOpacity * CONFIG.opacity
+            : trail * CONFIG.trailOpacity * CONFIG.opacity;
+
+          if (isHead) {
+            ctx.fillStyle = `hsla(
+                    ${column.hue},
+                    ${CONFIG.saturation}%,
+                    ${CONFIG.headLightness}%,
+                    ${alpha}
+                )`;
+          } else {
+            ctx.fillStyle = `hsla(
+                    ${column.hue},
+                    ${CONFIG.saturation}%,
+                    ${CONFIG.lightness}%,
+                    ${alpha}
+                )`;
+          }
+
+          ctx.font = `${size}px monospace`;
+
+          ctx.textAlign = "center";
+
+          ctx.fillText(column.chars[i], column.x + size / 2, y);
+        }
+
+        if (column.y > height + column.length * size) {
+          column.y = -column.length * size - Math.random() * 300;
+
+          column.speed =
+            CONFIG.minSpeed +
+            Math.random() * (CONFIG.maxSpeed - CONFIG.minSpeed);
+        }
+      }
+
+      function render(timestamp) {
+        if (!running) {
+          return;
+        }
+
+        if (timestamp - lastFrame >= frameInterval) {
+          lastFrame = timestamp;
+
+          ctx.clearRect(0, 0, width, height);
+
+          for (let i = 0; i < columns.length; i++) {
+            drawColumn(columns[i]);
+          }
+        }
+
+        requestAnimationFrame(render);
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          running = false;
+        } else {
+          running = true;
+          lastFrame = performance.now();
+          requestAnimationFrame(render);
+        }
+      });
+
+      init();
+
+      requestAnimationFrame(render);
+    </script>
+  </body>
+</html>
+```
