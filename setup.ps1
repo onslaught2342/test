@@ -59,7 +59,7 @@ $Packages = @(
 
 Write-Host "Downloading wallpaper..."
 
-$WallpaperURL = "https://setup-567.pages.dev/Wallpaper/python.png"
+$WallpaperURL = "https://setup-567.pages.dev/wallpaper/python.png"
 
 Invoke-WebRequest `
     -Uri $WallpaperURL `
