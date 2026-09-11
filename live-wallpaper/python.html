@@ -1,9 +1,12 @@
-```html
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
 
     <title>Matrix Rain Background</title>
 
@@ -13,8 +16,14 @@
         width: 100%;
         height: 100%;
         margin: 0;
+        padding: 0;
         overflow: hidden;
         background: #111;
+      }
+
+      body {
+        position: fixed;
+        inset: 0;
       }
 
       #background {
@@ -27,6 +36,7 @@
         z-index: 0;
         user-select: none;
         pointer-events: none;
+        display: block;
       }
 
       #matrix {
@@ -54,22 +64,35 @@
       "use strict";
 
       const CONFIG = {
-        backgroundImage: "https://setup-567.pages.dev/wallpaper/python.png",
+        backgroundImage:
+          "https://setup-567.pages.dev/wallpaper/python.png",
+
         hue: 120,
         saturation: 100,
         lightness: 48,
         headLightness: 90,
+
         opacity: 0.65,
+
         fontSize: 18,
+
         columns: null,
+
         minLength: 8,
         maxLength: 24,
+
         minSpeed: 4.0,
         maxSpeed: 6.0,
+
         mutationRate: 0.025,
+
         fps: 30,
+
+        // Keep this at 0.75
         renderScale: 0.75,
+
         hueVariation: 10,
+
         glyphs:
           "アイウエオカキクケコ" +
           "サシスセソタチツテト" +
@@ -78,12 +101,15 @@
           "ラリルレロワヲン" +
           "0123456789" +
           "ABCDEF",
+
         glow: false,
+
         trailOpacity: 0.55,
         headOpacity: 0.95,
       };
 
       const canvas = document.getElementById("matrix");
+
       const ctx = canvas.getContext("2d", {
         alpha: true,
         desynchronized: true,
@@ -95,13 +121,22 @@
 
       let width = 0;
       let height = 0;
+
       let renderWidth = 0;
       let renderHeight = 0;
+
       let columns = [];
+
       let lastFrame = 0;
+
       const frameInterval = 1000 / CONFIG.fps;
+
       let running = true;
 
+      /*
+       * Cache glyphs so the browser doesn't have to repeatedly
+       * calculate the same characters.
+       */
       const glyphCache = new Map();
 
       function createGlyph(char, size, hue) {
@@ -124,13 +159,27 @@
         glyphCtx.textAlign = "center";
         glyphCtx.textBaseline = "middle";
 
-        glyphCtx.fillStyle = `hsl(${hue}, ${CONFIG.saturation}%, ${CONFIG.lightness}%)`;
+        glyphCtx.fillStyle = `hsl(
+          ${hue},
+          ${CONFIG.saturation}%,
+          ${CONFIG.lightness}%
+        )`;
 
-        glyphCtx.fillText(char, glyphCanvas.width / 2, glyphCanvas.height / 2);
+        glyphCtx.fillText(
+          char,
+          glyphCanvas.width / 2,
+          glyphCanvas.height / 2
+        );
 
         glyphCache.set(key, glyphCanvas);
 
         return glyphCanvas;
+      }
+
+      function randomGlyph() {
+        return CONFIG.glyphs[
+          Math.floor(Math.random() * CONFIG.glyphs.length)
+        ];
       }
 
       function createColumn(index) {
@@ -138,7 +187,10 @@
 
         const length =
           CONFIG.minLength +
-          Math.floor(Math.random() * (CONFIG.maxLength - CONFIG.minLength + 1));
+          Math.floor(
+            Math.random() *
+              (CONFIG.maxLength - CONFIG.minLength + 1)
+          );
 
         const chars = new Array(length);
 
@@ -146,43 +198,91 @@
           chars[i] = randomGlyph();
         }
 
-        let hue = CONFIG.hue + (Math.random() * 2 - 1) * CONFIG.hueVariation;
+        let hue =
+          CONFIG.hue +
+          (Math.random() * 2 - 1) * CONFIG.hueVariation;
 
         hue = (hue + 360) % 360;
 
         return {
           x: index * size,
+
           y: -Math.random() * height * 1.5,
+
           speed:
             CONFIG.minSpeed +
-            Math.random() * (CONFIG.maxSpeed - CONFIG.minSpeed),
+            Math.random() *
+              (CONFIG.maxSpeed - CONFIG.minSpeed),
+
           chars,
+
           hue,
+
           length,
         };
       }
 
-      function randomGlyph() {
-        return CONFIG.glyphs[Math.floor(Math.random() * CONFIG.glyphs.length)];
-      }
-
+      /*
+       * Initialize canvas.
+       *
+       * Important:
+       * The canvas backing resolution is reduced to 75%,
+       * while its CSS size remains the full viewport.
+       *
+       * The transform maps our normal viewport coordinates
+       * onto that smaller drawing buffer.
+       */
       function init() {
         width = window.innerWidth;
         height = window.innerHeight;
 
-        renderWidth = Math.max(1, Math.floor(width * CONFIG.renderScale));
+        const scale = CONFIG.renderScale;
 
-        renderHeight = Math.max(1, Math.floor(height * CONFIG.renderScale));
+        renderWidth = Math.max(
+          1,
+          Math.floor(width * scale)
+        );
 
+        renderHeight = Math.max(
+          1,
+          Math.floor(height * scale)
+        );
+
+        /*
+         * Internal drawing resolution
+         */
         canvas.width = renderWidth;
         canvas.height = renderHeight;
 
-        ctx.setTransform(CONFIG.renderScale, 0, 0, CONFIG.renderScale, 0, 0);
+        /*
+         * Display size
+         */
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
 
+        /*
+         * Draw in normal viewport coordinates.
+         * The browser scales the result down internally.
+         */
+        ctx.setTransform(
+          scale,
+          0,
+          0,
+          scale,
+          0,
+          0
+        );
+
+        /*
+         * Number of columns is based on the actual
+         * viewport width, not the reduced canvas width.
+         */
         const columnCount =
           CONFIG.columns !== null
             ? CONFIG.columns
-            : Math.ceil(width / CONFIG.fontSize);
+            : Math.ceil(
+                width / CONFIG.fontSize
+              );
 
         columns = new Array(columnCount);
 
@@ -191,71 +291,140 @@
         }
       }
 
+      /*
+       * Resize handling
+       *
+       * Mobile browsers can fire resize events repeatedly
+       * when their address/navigation bars appear or disappear.
+       */
       let resizeTimer = null;
 
-      window.addEventListener("resize", () => {
-        clearTimeout(resizeTimer);
+      window.addEventListener(
+        "resize",
+        () => {
+          clearTimeout(resizeTimer);
 
-        resizeTimer = setTimeout(() => {
-          init();
-        }, 100);
-      });
+          resizeTimer = setTimeout(() => {
+            init();
+          }, 150);
+        },
+        { passive: true }
+      );
+
+      /*
+       * Also handle orientation changes explicitly.
+       */
+      window.addEventListener(
+        "orientationchange",
+        () => {
+          clearTimeout(resizeTimer);
+
+          resizeTimer = setTimeout(() => {
+            init();
+          }, 200);
+        },
+        { passive: true }
+      );
 
       function drawColumn(column) {
         const size = CONFIG.fontSize;
 
         column.y += column.speed;
 
-        if (Math.random() < CONFIG.mutationRate) {
-          const index = Math.floor(Math.random() * column.chars.length);
+        /*
+         * Randomly change characters.
+         */
+        if (
+          Math.random() <
+          CONFIG.mutationRate
+        ) {
+          const index = Math.floor(
+            Math.random() *
+              column.chars.length
+          );
 
           column.chars[index] = randomGlyph();
         }
 
-        for (let i = 0; i < column.chars.length; i++) {
-          const y = column.y + i * size;
+        for (
+          let i = 0;
+          i < column.chars.length;
+          i++
+        ) {
+          const y =
+            column.y +
+            i * size;
 
-          if (y < -size || y > height + size) {
+          /*
+           * Don't render characters outside
+           * the visible viewport.
+           */
+          if (
+            y < -size ||
+            y > height + size
+          ) {
             continue;
           }
 
-          const isHead = i === column.chars.length - 1;
+          const isHead =
+            i === column.chars.length - 1;
 
-          const trail = 1 - i / column.chars.length;
+          const trail =
+            1 -
+            i / column.chars.length;
 
           const alpha = isHead
-            ? CONFIG.headOpacity * CONFIG.opacity
-            : trail * CONFIG.trailOpacity * CONFIG.opacity;
+            ? CONFIG.headOpacity *
+              CONFIG.opacity
+            : trail *
+              CONFIG.trailOpacity *
+              CONFIG.opacity;
 
           if (isHead) {
             ctx.fillStyle = `hsla(
-                    ${column.hue},
-                    ${CONFIG.saturation}%,
-                    ${CONFIG.headLightness}%,
-                    ${alpha}
-                )`;
+              ${column.hue},
+              ${CONFIG.saturation}%,
+              ${CONFIG.headLightness}%,
+              ${alpha}
+            )`;
           } else {
             ctx.fillStyle = `hsla(
-                    ${column.hue},
-                    ${CONFIG.saturation}%,
-                    ${CONFIG.lightness}%,
-                    ${alpha}
-                )`;
+              ${column.hue},
+              ${CONFIG.saturation}%,
+              ${CONFIG.lightness}%,
+              ${alpha}
+            )`;
           }
 
           ctx.font = `${size}px monospace`;
-
           ctx.textAlign = "center";
+          ctx.textBaseline = "alphabetic";
 
-          ctx.fillText(column.chars[i], column.x + size / 2, y);
+          ctx.fillText(
+            column.chars[i],
+            column.x + size / 2,
+            y
+          );
         }
 
-        if (column.y > height + column.length * size) {
-          column.y = -column.length * size - Math.random() * 300;
+        /*
+         * Reset column after it completely
+         * leaves the bottom of the screen.
+         */
+        if (
+          column.y >
+          height +
+            column.length * size
+        ) {
+          column.y =
+            -column.length * size -
+            Math.random() * 300;
 
           column.speed =
             CONFIG.minSpeed +
-            Math.random() * (CONFIG.maxSpeed - CONFIG.minSpeed);
+            Math.random() *
+              (CONFIG.maxSpeed -
+                CONFIG.minSpeed);
         }
       }
 
@@ -264,12 +433,33 @@
           return;
         }
 
-        if (timestamp - lastFrame >= frameInterval) {
+        /*
+         * Limit rendering to the configured FPS.
+         */
+        if (
+          timestamp - lastFrame >=
+          frameInterval
+        ) {
           lastFrame = timestamp;
 
-          ctx.clearRect(0, 0, width, height);
+          /*
+           * Because the context transform maps
+           * viewport coordinates onto the reduced
+           * canvas, clearing with width/height
+           * is correct.
+           */
+          ctx.clearRect(
+            0,
+            0,
+            width,
+            height
+          );
 
-          for (let i = 0; i < columns.length; i++) {
+          for (
+            let i = 0;
+            i < columns.length;
+            i++
+          ) {
             drawColumn(columns[i]);
           }
         }
@@ -277,20 +467,34 @@
         requestAnimationFrame(render);
       }
 
-      document.addEventListener("visibilitychange", () => {
-        if (document.hidden) {
-          running = false;
-        } else {
-          running = true;
-          lastFrame = performance.now();
-          requestAnimationFrame(render);
-        }
-      });
+      /*
+       * Pause animation when the tab/app isn't visible.
+       * This saves battery on mobile.
+       */
+      document.addEventListener(
+        "visibilitychange",
+        () => {
+          if (document.hidden) {
+            running = false;
+          } else {
+            running = true;
 
+            lastFrame =
+              performance.now();
+
+            requestAnimationFrame(
+              render
+            );
+          }
+        }
+      );
+
+      /*
+       * Initial setup
+       */
       init();
 
       requestAnimationFrame(render);
     </script>
   </body>
 </html>
-```

@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+
+    <title>Matrix Rain Background</title>
+
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #111;
+
+        /* Prevent browser swipe navigation on mobile */
+        overscroll-behavior: none;
+        touch-action: pan-y;
+      }
+
+      body {
+        position: fixed;
+        inset: 0;
+      }
+
+      #background {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        z-index: 0;
+        user-select: none;
+        pointer-events: none;
+        display: block;
+
+        /* Smooth wallpaper transitions */
+        transition: opacity 180ms ease;
+      }
+
+      #matrix {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        pointer-events: none;
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body>
+    <img id="background" src="" alt="" draggable="false" />
+
+    <canvas id="matrix"></canvas>
+
+    <script>
+      "use strict";
+
+      const CONFIG = {
+        /*
+         * ==========================================
+         * BACKGROUND IMAGES
+         * ==========================================
+         *
+         * Add as many PNGs as you want.
+         *
+         * ArrowRight / swipe left  = next image
+         * ArrowLeft  / swipe right = previous image
+         *
+         * You can also use local files:
+         *
+         * "wallpaper/python.png"
+         * "wallpaper/scratch.png"
+         */
+
+        backgroundImages: [
+          "https://setup-567.pages.dev/table/image/1.png",
+          "https://setup-567.pages.dev/table/image/2.png",
+          "https://setup-567.pages.dev/table/image/3.png",
+        ],
+
+        /*
+         * Starting wallpaper.
+         * 0 = first image
+         * 1 = second image
+         * etc.
+         */
+        startingBackground: 0,
+
+        /*
+         * Swipe sensitivity.
+         *
+         * Lower = easier to trigger.
+         * Higher = requires a longer swipe.
+         */
+        swipeThreshold: 50,
+
+        /*
+         * Matrix configuration
+         */
+
+        hue: 120,
+        saturation: 100,
+        lightness: 48,
+        headLightness: 90,
+
+        opacity: 0.65,
+
+        fontSize: 18,
+
+        columns: null,
+
+        minLength: 8,
+        maxLength: 24,
+
+        minSpeed: 4.0,
+        maxSpeed: 6.0,
+
+        mutationRate: 0.025,
+
+        fps: 30,
+
+        // Keep this at 0.75
+        renderScale: 0.75,
+
+        hueVariation: 10,
+
+        glyphs:
+          "アイウエオカキクケコ" +
+          "サシスセソタチツテト" +
+          "ナニヌネノハヒフヘホ" +
+          "マミムメモヤユヨ" +
+          "ラリルレロワヲン" +
+          "0123456789" +
+          "ABCDEF",
+
+        glow: false,
+
+        trailOpacity: 0.55,
+        headOpacity: 0.95,
+      };
+
+      const canvas = document.getElementById("matrix");
+
+      const ctx = canvas.getContext("2d", {
+        alpha: true,
+        desynchronized: true,
+      });
+
+      const background = document.getElementById("background");
+
+      /*
+       * ==========================================
+       * BACKGROUND NAVIGATION
+       * ==========================================
+       */
+
+      let currentBackground =
+        ((CONFIG.startingBackground % CONFIG.backgroundImages.length) +
+          CONFIG.backgroundImages.length) %
+        CONFIG.backgroundImages.length;
+
+      /*
+       * Preload every background image.
+       * This prevents delays when switching.
+       */
+      const preloadedBackgrounds = [];
+
+      function preloadBackgrounds() {
+        for (const url of CONFIG.backgroundImages) {
+          const img = new Image();
+          img.src = url;
+          preloadedBackgrounds.push(img);
+        }
+      }
+
+      function showBackground(index, animate = true) {
+        if (CONFIG.backgroundImages.length === 0) {
+          return;
+        }
+
+        /*
+         * Wrap index around automatically.
+         */
+        currentBackground =
+          ((index % CONFIG.backgroundImages.length) +
+            CONFIG.backgroundImages.length) %
+          CONFIG.backgroundImages.length;
+
+        const nextImage = CONFIG.backgroundImages[currentBackground];
+
+        if (animate) {
+          background.style.opacity = "0";
+
+          setTimeout(() => {
+            background.src = nextImage;
+            background.style.opacity = "1";
+          }, 90);
+        } else {
+          background.src = nextImage;
+          background.style.opacity = "1";
+        }
+      }
+
+      function nextBackground() {
+        showBackground(currentBackground + 1);
+      }
+
+      function previousBackground() {
+        showBackground(currentBackground - 1);
+      }
+
+      /*
+       * ==========================================
+       * KEYBOARD NAVIGATION
+       * ==========================================
+       */
+
+      document.addEventListener("keydown", (event) => {
+        /*
+         * Ignore keyboard navigation when the user
+         * is typing inside an input or textarea.
+         */
+        const target = event.target;
+
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+
+        switch (event.key) {
+          case "ArrowRight":
+          case "ArrowDown":
+            event.preventDefault();
+            nextBackground();
+            break;
+
+          case "ArrowLeft":
+          case "ArrowUp":
+            event.preventDefault();
+            previousBackground();
+            break;
+        }
+      });
+
+      /*
+       * ==========================================
+       * TOUCH / GESTURE NAVIGATION
+       * ==========================================
+       *
+       * Swipe left  -> next background
+       * Swipe right -> previous background
+       */
+
+      let touchStartX = 0;
+      let touchStartY = 0;
+
+      let touchEndX = 0;
+      let touchEndY = 0;
+
+      let touchActive = false;
+
+      document.addEventListener(
+        "touchstart",
+        (event) => {
+          if (event.touches.length !== 1) {
+            return;
+          }
+
+          touchActive = true;
+
+          touchStartX = event.touches[0].clientX;
+          touchStartY = event.touches[0].clientY;
+
+          touchEndX = touchStartX;
+          touchEndY = touchStartY;
+        },
+        {
+          passive: true,
+        },
+      );
+
+      document.addEventListener(
+        "touchmove",
+        (event) => {
+          if (!touchActive || event.touches.length !== 1) {
+            return;
+          }
+
+          touchEndX = event.touches[0].clientX;
+          touchEndY = event.touches[0].clientY;
+        },
+        {
+          passive: true,
+        },
+      );
+
+      document.addEventListener(
+        "touchend",
+        () => {
+          if (!touchActive) {
+            return;
+          }
+
+          touchActive = false;
+
+          const deltaX = touchEndX - touchStartX;
+          const deltaY = touchEndY - touchStartY;
+
+          /*
+           * Only treat it as a horizontal swipe when
+           * horizontal movement is greater than vertical.
+           *
+           * This prevents normal scrolling gestures
+           * from accidentally changing wallpapers.
+           */
+          if (
+            Math.abs(deltaX) > CONFIG.swipeThreshold &&
+            Math.abs(deltaX) > Math.abs(deltaY)
+          ) {
+            if (deltaX < 0) {
+              /*
+               * Swipe left
+               */
+              nextBackground();
+            } else {
+              /*
+               * Swipe right
+               */
+              previousBackground();
+            }
+          }
+        },
+        {
+          passive: true,
+        },
+      );
+
+      /*
+       * Also handle cancelled touches.
+       */
+      document.addEventListener(
+        "touchcancel",
+        () => {
+          touchActive = false;
+        },
+        {
+          passive: true,
+        },
+      );
+
+      /*
+       * Show initial wallpaper.
+       */
+      preloadBackgrounds();
+      showBackground(currentBackground, false);
+
+      /*
+       * ==========================================
+       * MATRIX RAIN
+       * ==========================================
+       */
+
+      let width = 0;
+      let height = 0;
+
+      let renderWidth = 0;
+      let renderHeight = 0;
+
+      let columns = [];
+
+      let lastFrame = 0;
+
+      const frameInterval = 1000 / CONFIG.fps;
+
+      let running = true;
+
+      /*
+       * Cache glyphs so the browser doesn't have to
+       * repeatedly calculate the same characters.
+       */
+      const glyphCache = new Map();
+
+      function createGlyph(char, size, hue) {
+        const key = `${char}_${size}_${hue}`;
+
+        if (glyphCache.has(key)) {
+          return glyphCache.get(key);
+        }
+
+        const padding = 4;
+
+        const glyphCanvas = document.createElement("canvas");
+
+        glyphCanvas.width = size + padding * 2;
+        glyphCanvas.height = size + padding * 2;
+
+        const glyphCtx = glyphCanvas.getContext("2d");
+
+        glyphCtx.font = `${size}px monospace`;
+        glyphCtx.textAlign = "center";
+        glyphCtx.textBaseline = "middle";
+
+        glyphCtx.fillStyle = `hsl(
+          ${hue},
+          ${CONFIG.saturation}%,
+          ${CONFIG.lightness}%
+        )`;
+
+        glyphCtx.fillText(char, glyphCanvas.width / 2, glyphCanvas.height / 2);
+
+        glyphCache.set(key, glyphCanvas);
+
+        return glyphCanvas;
+      }
+
+      function randomGlyph() {
+        return CONFIG.glyphs[Math.floor(Math.random() * CONFIG.glyphs.length)];
+      }
+
+      function createColumn(index) {
+        const size = CONFIG.fontSize;
+
+        const length =
+          CONFIG.minLength +
+          Math.floor(Math.random() * (CONFIG.maxLength - CONFIG.minLength + 1));
+
+        const chars = new Array(length);
+
+        for (let i = 0; i < length; i++) {
+          chars[i] = randomGlyph();
+        }
+
+        let hue = CONFIG.hue + (Math.random() * 2 - 1) * CONFIG.hueVariation;
+
+        hue = (hue + 360) % 360;
+
+        return {
+          x: index * size,
+
+          y: -Math.random() * height * 1.5,
+
+          speed:
+            CONFIG.minSpeed +
+            Math.random() * (CONFIG.maxSpeed - CONFIG.minSpeed),
+
+          chars,
+
+          hue,
+
+          length,
+        };
+      }
+
+      /*
+       * Initialize canvas.
+       */
+      function init() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+
+        const scale = CONFIG.renderScale;
+
+        renderWidth = Math.max(1, Math.floor(width * scale));
+
+        renderHeight = Math.max(1, Math.floor(height * scale));
+
+        /*
+         * Internal drawing resolution
+         */
+        canvas.width = renderWidth;
+        canvas.height = renderHeight;
+
+        /*
+         * Display size
+         */
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+
+        /*
+         * Draw in normal viewport coordinates.
+         */
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
+        /*
+         * Number of columns is based on the actual
+         * viewport width, not the reduced canvas width.
+         */
+        const columnCount =
+          CONFIG.columns !== null
+            ? CONFIG.columns
+            : Math.ceil(width / CONFIG.fontSize);
+
+        columns = new Array(columnCount);
+
+        for (let i = 0; i < columnCount; i++) {
+          columns[i] = createColumn(i);
+        }
+      }
+
+      /*
+       * Resize handling
+       */
+      let resizeTimer = null;
+
+      window.addEventListener(
+        "resize",
+        () => {
+          clearTimeout(resizeTimer);
+
+          resizeTimer = setTimeout(() => {
+            init();
+          }, 150);
+        },
+        {
+          passive: true,
+        },
+      );
+
+      /*
+       * Orientation changes
+       */
+      window.addEventListener(
+        "orientationchange",
+        () => {
+          clearTimeout(resizeTimer);
+
+          resizeTimer = setTimeout(() => {
+            init();
+          }, 200);
+        },
+        {
+          passive: true,
+        },
+      );
+
+      function drawColumn(column) {
+        const size = CONFIG.fontSize;
+
+        column.y += column.speed;
+
+        /*
+         * Randomly change characters.
+         */
+        if (Math.random() < CONFIG.mutationRate) {
+          const index = Math.floor(Math.random() * column.chars.length);
+
+          column.chars[index] = randomGlyph();
+        }
+
+        for (let i = 0; i < column.chars.length; i++) {
+          const y = column.y + i * size;
+
+          /*
+           * Don't render characters outside
+           * the visible viewport.
+           */
+          if (y < -size || y > height + size) {
+            continue;
+          }
+
+          const isHead = i === column.chars.length - 1;
+
+          const trail = 1 - i / column.chars.length;
+
+          const alpha = isHead
+            ? CONFIG.headOpacity * CONFIG.opacity
+            : trail * CONFIG.trailOpacity * CONFIG.opacity;
+
+          if (isHead) {
+            ctx.fillStyle = `hsla(
+              ${column.hue},
+              ${CONFIG.saturation}%,
+              ${CONFIG.headLightness}%,
+              ${alpha}
+            )`;
+          } else {
+            ctx.fillStyle = `hsla(
+              ${column.hue},
+              ${CONFIG.saturation}%,
+              ${CONFIG.lightness}%,
+              ${alpha}
+            )`;
+          }
+
+          ctx.font = `${size}px monospace`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "alphabetic";
+
+          ctx.fillText(column.chars[i], column.x + size / 2, y);
+        }
+
+        /*
+         * Reset column after it completely
+         * leaves the bottom of the screen.
+         */
+        if (column.y > height + column.length * size) {
+          column.y = -column.length * size - Math.random() * 300;
+
+          column.speed =
+            CONFIG.minSpeed +
+            Math.random() * (CONFIG.maxSpeed - CONFIG.minSpeed);
+        }
+      }
+
+      function render(timestamp) {
+        if (!running) {
+          return;
+        }
+
+        /*
+         * Limit rendering to configured FPS.
+         */
+        if (timestamp - lastFrame >= frameInterval) {
+          lastFrame = timestamp;
+
+          ctx.clearRect(0, 0, width, height);
+
+          for (let i = 0; i < columns.length; i++) {
+            drawColumn(columns[i]);
+          }
+        }
+
+        requestAnimationFrame(render);
+      }
+
+      /*
+       * Pause animation when the tab/app isn't visible.
+       * Saves battery on mobile.
+       */
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          running = false;
+        } else {
+          running = true;
+
+          lastFrame = performance.now();
+
+          requestAnimationFrame(render);
+        }
+      });
+
+      /*
+       * Initial setup
+       */
+      init();
+
+      requestAnimationFrame(render);
+    </script>
+  </body>
+</html>
