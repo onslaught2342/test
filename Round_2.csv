@@ -1,0 +1,6 @@
+﻿Batch,Units,Electricity (kWh),Fuel (L),Raw Transport (ton-km),Product Transport (ton-km),Waste (kg),Packaging (kg)
+A,1000,2500,400,600,500,120,300
+B,1200,3000,450,700,650,150,350
+C,900,2100,350,500,450,90,280
+D,1500,3800,520,850,800,210,420
+E,1100,2700,390,620,550,130,310
